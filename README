@@ -1,0 +1,175 @@
+The "libehkv" C library specifies a basic key-value table.
+
+The main 'ehkv' structure is defined in 'ehkv.h' to be:
+
+	struct ehkv {
+		size_t entries_len;
+		size_t entries_used;
+		const void **keys;
+		size_t *key_lengths;
+		void **values;
+	};
+
+Construction
+--------------------
+
+The struct ehkv is a key-value table of a fixed size.
+All malloc/free is handled by the caller.
+
+	size_t max_keys		= 128;
+	struct ehkv *table	= calloc(1, sizeof(struct ehkv));
+
+	table->entries_len	= max_keys;
+	table->entries_used	= 0;
+	table->keys		= calloc(max_keys, sizeof(void *));
+	table->key_lengths	= calloc(max_keys, sizeof(size_t));
+	table->values		= calloc(max_keys, sizeof(void *));
+
+The ehkv functions assume the following are always true:
+ 1) the 'keys' is an array of length 'entries_len'
+ 2) the 'values' is an array of length 'entries_len'
+ 3) the 'entries_used' indicates the number of occupied keys.
+ 4) each occupied value in 'keys' array has a corresponding length in
+		the 'key_lengths' array
+
+The operations are _not_ thread-safe, and thus the caller is
+responsible for locking if used in a multi-threaded environment.
+
+The struct can be entirely constructed on the stack, of course:
+
+	const size_t max_keys = 32;
+	const void *keys[max_keys];
+	size_t key_lenghts[max_keys];
+	void *vals[max_keys];
+	struct ehkv stack_table = {
+		.entries_len = max_keys,
+		.entries_used = 0,
+		.keys = keys,
+		.key_lengths = key_lenghts,
+		.values = vals
+	};
+	struct ehkv *table = &stack_table;
+
+
+Functions
+---------
+
+The ehkv functions do no memory allocation or de-allocation.
+The caller is responsible for allocating/freeing each key buffer.
+The 'ehkv_put' and 'ehkv_del' have optional 'previous' pointers.
+
+	struct ehkv_entry {
+		const void *key;	/* caller may need to free(key) */
+		size_t key_len;
+		void *value;		/* caller may need to free(value) */
+		size_t index;		/* SIZE_MAX == not present */
+	};
+
+ehkv_put
+--------
+The 'ehkv_put' function returns 1 if there was NOT room to insert the
+value, and does not update the table, nor populate the 'previous' struct.
+returns 0 if there was room to insert the value, and populates the
+'previous' struct with the buffers previously associated with that key.
+
+	int	/* error_code */
+	ehkv_put(
+		struct ehkv *table,
+		const void *key,
+		size_t key_len,
+		void *val,
+		struct ehkv_entry *previous	/* optional "out" param */
+	);
+
+
+example usage:
+
+	const char *key = "foo";
+	void *val = "bar";
+	struct ehkv_entry previous;
+	int err = ehkv_put(table, key, strlen(key), val, &previous);
+	if (err) {
+		fprintf(stderr, "no room!\n");
+		exit(EXIT_FAILURE);
+	}
+
+
+ehkv_get
+--------
+
+The 'ehkv_get' function takes a pointer to the table, a pointer to the key,
+the length of the key in bytes, and returns a pointer to the value. If the
+'index' parameter is non-null it will be populated with the index of the
+value if found or SIZE_MAX if not.
+
+	void *
+	ehkv_get(
+		struct ehkv *table,
+		const void *key,
+		size_t key_len,
+		size_t *index	/* optional "out" param */
+	);
+
+
+example usage:
+
+	size_t idx = SIZE_MAX;
+	void *val = table->get(table, buf, strlen(buf), &idx);
+
+
+ehkv_del
+--------
+
+The 'ehkv_del' function takes a pointer to the table, a pointer to the key,
+the length of the key in bytes, and returns a pointer to the value. If the
+'previous' pointer is non-NULL, it will be populated the previous table
+contents.
+
+	void *
+	ehkv_del(
+		struct ehkv *table,
+		const void *key,
+		size_t key_len,
+		struct ehkv_entry *previous	/* optional "out" param */
+	);
+
+example usage:
+	struct ehkv_entry prev;
+	void *val = ehkv_del(table, buf, strlen(buf), &prev);
+	free(prev.key);
+	free(prev.value);
+
+
+ehkv_pos
+--------
+
+The 'ehkv_pos' function returns the position in the keys array if present
+or SIZE_MAX if not.
+
+	size_t	/* position in the table->keys array or SIZE_MAX */
+	ehkv_pos(
+		struct ehkv *table,
+		const void *key,
+		size_t key_len
+	);
+
+
+
+ehkv_full
+---------
+
+The 'ehkv_full' funtion returns 0 if table->entries_used < table->entries_len
+
+	int
+	ehkv_full(
+		struct ehkv *table
+	);
+
+Demos and Test as Examples
+--------------------------
+The files in the 'demos/' and 'tests/' directries may serve as examples.
+
+License
+-------
+GNU Lesser General Public License (LGPL), version 3 or later.
+See COPYING, COPYING.LESSER for details.

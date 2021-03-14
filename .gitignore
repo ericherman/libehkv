@@ -1,0 +1,37 @@
+build
+debug
+*.out
+
+###################
+# backup files
+###################
+*.bak
+*.bck
+*cache.lib
+$*
+*.swp
+*.000
+*~
+.deps
+.dirstamp
+
+################
+# Output files
+################
+*.o
+*.so
+*.so.*
+*.a
+*.bin
+*.d
+*.la
+*.lo
+*.log
+*.trs
+*.tar.*
+*.gch
+*.gcda
+*.gcno
+tmp*
+coverage.info
+coverage_html
